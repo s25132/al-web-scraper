@@ -140,7 +140,7 @@ def ask_rag(vector_store, bm25, question: str):
 
     merged.sort(key=score, reverse=True)
 
-    context = "\n\n".join(d.page_content for d in merged{:10})
+    context = "\n\n".join(d.page_content for d in merged[:10])
 
     llm = ChatOpenAI(model="gpt-5", temperature=0)
 
