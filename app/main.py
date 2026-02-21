@@ -6,6 +6,7 @@ from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
+from langchain_community.retrievers import BM25Retriever
 
 
 DEFAULT_URL = "https://www.booking.com/hotel/de/maritimberlin.pl.html?label=gen173nr-10CAEoggI46AdIM1gEaLYBiAEBmAEzuAEXyAEM2AED6AEB-AEBiAIBqAIBuAKJ5ubMBsACAdICJDliMWZmMjZkLTY5ZGQtNDc5Ny04MDUxLTMyYzRmNjBlYjUzYtgCAeACAQ&sid=4b51bbf7a01a958f4b2fda85c35c5d56&aid=304142&ucfs=1&arphpl=1&checkin=2026-05-02&checkout=2026-05-05&group_adults=2&req_adults=2&no_rooms=1&group_children=0&req_children=0&all_sr_blocks=6037402_418238029_0_34_0&highlighted_blocks=6037402_418238029_0_34_0&matching_block_id=6037402_418238029_0_34_0&sr_pri_blocks=6037402_418238029_0_34_0&from_list=1&selected_currency=EUR"
@@ -103,22 +104,47 @@ def build_rag_from_html(html: str):
         chunks,
         embeddings
     )
+    
+        # +++ BM25 na chunkach +++
+    bm25 = BM25Retriever.from_documents(chunks)
 
-    return vector_store
+
+    return vector_store, bm25
 
 
-def ask_rag(vector_store, question: str):
-    retriever = vector_store.as_retriever(
-        search_kwargs={"k": 3}
-    )
+def ask_rag(vector_store, bm25, question: str):
+    bm25.k = 10
+    bm_docs = bm25.invoke(question) 
 
-    docs = retriever.invoke(question)
+    vs_docs = vector_store.as_retriever(search_kwargs={"k": 10}).invoke(question)
 
-    context = "\n\n".join([d.page_content for d in docs])
+    merged = []
+    seen = set()
+    for d in bm_docs + vs_docs:
+        key = d.page_content[:1000]
+        if key not in seen:
+            seen.add(key)
+            merged.append(d)
+
+    # Prosty rerank: premiuj chunki zawierające "Classic" i "€" / "EUR"
+    def score(doc: Document) -> int:
+        t = doc.page_content.lower()
+        s = 0
+        if "classic" in t:
+            s += 5
+        if "€" in t or " eur" in t:
+            s += 2
+        if "śniad" in t or "breakfast" in t:
+            s += 1
+        return s
+
+    merged.sort(key=score, reverse=True)
+
+    context = "\n\n".join(d.page_content for d in merged{:10})
 
     llm = ChatOpenAI(model="gpt-5", temperature=0)
 
-    prompt = prompt = f"""
+    prompt = f"""
 Jesteś systemem ekstrakcji danych. Twoim zadaniem jest wyciągnąć informacje o cenach pokoi z kontekstu.
 
 ZASADY:
@@ -128,18 +154,17 @@ ZASADY:
 - Wszystkie ceny muszą być liczbami (bez symboli walut).
 
 Format JSON:
-
 {{
   "rooms": [
     {{
       "room_type": "string",
       "breakfast_included": true,
-      "price_eur": number,
+      "price_eur": number
     }},
     {{
       "room_type": "string",
       "breakfast_included": false,
-      "price_eur": number,
+      "price_eur": number
     }}
   ]
 }}
@@ -151,21 +176,20 @@ Pytanie:
 {question}
 
 Zwróć wyłącznie JSON.
-"""
+""".strip()
 
     response = llm.invoke(prompt)
-
     return response.content
-
 
 
 def main() -> None:
     html = get_page_content(DEFAULT_URL)
 
-    vector_store = build_rag_from_html(html)
+    vector_store, bm25 = build_rag_from_html(html)
 
     answer = ask_rag(
         vector_store,
+        bm25,
         "Daj mi cenę pokoju Pokój Dwuosobowy typu Classic i tylko Classic ze śniadaniem i bez śniadania. Daj ceny w EUR"
     )
 
