@@ -80,7 +80,7 @@ with st.sidebar:
     selected_room_types = st.multiselect(
         "room_type",
         options=room_types,
-        default=room_types[:1] if room_types else []
+        default=room_types if room_types else []
     )
 
     breakfast_choice = st.selectbox(
