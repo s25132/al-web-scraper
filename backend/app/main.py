@@ -210,3 +210,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+    # https://github.com/VectifyAI/PageIndex -> do przemyślenia, może uprościć RAG i dać więcej kontroli nad chunkowaniem i embeddingiem

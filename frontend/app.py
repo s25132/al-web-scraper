@@ -177,3 +177,20 @@ st.dataframe(
     .sort_values("scraped_at_local", ascending=False),
     use_container_width=True
 )
+
+# -------------------------------
+# Average prices table
+# -------------------------------
+st.subheader("Średnia cena dla typów pokoi (ze śniadaniem / bez śniadania)")
+
+avg_prices = (
+    f.groupby(["room_type", "breakfast_included", "currency"], dropna=False)["price"]
+    .mean()
+    .reset_index()
+    .rename(columns={"price": "avg_price"})
+    .sort_values(["room_type", "breakfast_included", "currency"])
+)
+
+avg_prices["avg_price"] = avg_prices["avg_price"].round(2)
+
+st.dataframe(avg_prices, use_container_width=True)
