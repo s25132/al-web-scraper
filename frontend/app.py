@@ -4,7 +4,7 @@ import streamlit as st
 import altair as alt
 from supabase import create_client
 
-st.set_page_config(page_title="Room prices", layout="wide")
+st.set_page_config(page_title="Hotel & Flight prices", layout="wide")
 
 
 # -------------------------------
@@ -13,21 +13,21 @@ st.set_page_config(page_title="Room prices", layout="wide")
 @st.cache_resource
 def get_supabase():
     url = os.environ["SUPABASE_URL"]
-    key = os.environ["SUPABASE_SERVICE_KEY"]  # Secret key (backend only!)
+    key = os.environ["SUPABASE_SERVICE_KEY"]  # backend only
     return create_client(url, key)
 
 
 # -------------------------------
-# Load records with configurable limit
+# Load hotel records
 # -------------------------------
 @st.cache_data(ttl=60)
-def load_last(limit: int = 1000) -> pd.DataFrame:
+def load_last_rooms(limit: int = 1000) -> pd.DataFrame:
     supabase = get_supabase()
 
     res = (
         supabase.table("room_prices")
         .select("id,scraped_at,room_type,breakfast_included,price,currency")
-        .order("scraped_at", desc=True)  # najnowsze
+        .order("scraped_at", desc=True)
         .limit(limit)
         .execute()
     )
@@ -38,23 +38,54 @@ def load_last(limit: int = 1000) -> pd.DataFrame:
 
     df["scraped_at"] = pd.to_datetime(df["scraped_at"], utc=True, errors="coerce")
     df["price"] = pd.to_numeric(df["price"], errors="coerce")
-
     df = df.dropna(subset=["scraped_at", "price"])
 
-    # konwersja na czas lokalny
     df["scraped_at_local"] = df["scraped_at"].dt.tz_convert("Europe/Warsaw")
 
-    # sortowanie chronologiczne do wykresu
     return df.sort_values("scraped_at_local")
 
 
 # -------------------------------
-# UI
+# Load flight records
 # -------------------------------
-st.title("📈 Room prices over time")
+@st.cache_data(ttl=60)
+def load_last_flights(limit: int = 1000) -> pd.DataFrame:
+    supabase = get_supabase()
 
+    res = (
+        supabase.table("flight_prices")
+        .select("id,scraped_at,flight_type,price_pln,airport_from,airport_to,departure_datetime")
+        .order("scraped_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+
+    df = pd.DataFrame(res.data or [])
+    if df.empty:
+        return df
+
+    df["scraped_at"] = pd.to_datetime(df["scraped_at"], utc=True, errors="coerce")
+    df["departure_datetime"] = pd.to_datetime(df["departure_datetime"], utc=True, errors="coerce")
+    df["price_pln"] = pd.to_numeric(df["price_pln"], errors="coerce")
+
+    df = df.dropna(subset=["scraped_at", "departure_datetime", "price_pln"])
+
+    df["scraped_at_local"] = df["scraped_at"]
+    df["departure_datetime_local"] = df["departure_datetime"]
+
+    return df.sort_values("scraped_at_local")
+
+
+# -------------------------------
+# Sidebar - common settings
+# -------------------------------
 with st.sidebar:
     st.header("Ustawienia")
+
+    page = st.radio(
+        "Wybierz ekran",
+        ["Room prices", "Flight prices"]
+    )
 
     limit = st.selectbox(
         "Liczba rekordów",
@@ -62,135 +93,272 @@ with st.sidebar:
         index=2
     )
 
-df = load_last(limit=limit)
 
-if df.empty:
-    st.warning("Brak danych w tabeli room_prices.")
-    st.stop()
+# =========================================================
+# SCREEN 1: ROOM PRICES
+# =========================================================
+if page == "Room prices":
+    st.title("📈 Room prices over time")
 
-# -------------------------------
-# Sidebar filters
-# -------------------------------
-with st.sidebar:
-    st.header("Filtry")
+    df = load_last_rooms(limit=limit)
 
-    room_types = sorted(df["room_type"].dropna().unique().tolist())
-    currencies = sorted(df["currency"].dropna().unique().tolist())
+    if df.empty:
+        st.warning("Brak danych w tabeli room_prices.")
+        st.stop()
 
-    selected_room_types = st.multiselect(
-        "room_type",
-        options=room_types,
-        default=room_types if room_types else []
-    )
+    # -------------------------------
+    # Sidebar filters
+    # -------------------------------
+    with st.sidebar:
+        st.header("Filtry pokoi")
 
-    breakfast_choice = st.selectbox(
-        "breakfast_included",
-        ["both", "true", "false"],
-        index=0
-    )
+        room_types = sorted(df["room_type"].dropna().unique().tolist())
+        currencies = sorted(df["currency"].dropna().unique().tolist())
 
-    selected_currencies = st.multiselect(
-        "currency",
-        options=currencies,
-        default=currencies[:1] if currencies else []
-    )
-
-    min_dt = df["scraped_at_local"].min()
-    max_dt = df["scraped_at_local"].max()
-
-    if min_dt == max_dt:
-        st.info(f"Tylko jeden punkt czasowy: {min_dt}")
-        start_dt = min_dt.to_pydatetime()
-        end_dt = max_dt.to_pydatetime()
-    else:
-        start_dt, end_dt = st.slider(
-            "Zakres czasu (Europe/Warsaw)",
-            min_value=min_dt.to_pydatetime(),
-            max_value=max_dt.to_pydatetime(),
-            value=(min_dt.to_pydatetime(), max_dt.to_pydatetime()),
+        selected_room_types = st.multiselect(
+            "room_type",
+            options=room_types,
+            default=room_types if room_types else []
         )
 
-# -------------------------------
-# Apply filters
-# -------------------------------
-f = df.copy()
+        breakfast_choice = st.selectbox(
+            "breakfast_included",
+            ["both", "true", "false"],
+            index=0
+        )
 
-if selected_room_types:
-    f = f[f["room_type"].isin(selected_room_types)]
+        selected_currencies = st.multiselect(
+            "currency",
+            options=currencies,
+            default=currencies[:1] if currencies else []
+        )
 
-if selected_currencies:
-    f = f[f["currency"].isin(selected_currencies)]
+        min_dt = df["scraped_at_local"].min()
+        max_dt = df["scraped_at_local"].max()
 
-if breakfast_choice == "true":
-    f = f[f["breakfast_included"] == True]
-elif breakfast_choice == "false":
-    f = f[f["breakfast_included"] == False]
+        if min_dt == max_dt:
+            st.info(f"Tylko jeden punkt czasowy: {min_dt}")
+            start_dt = min_dt.to_pydatetime()
+            end_dt = max_dt.to_pydatetime()
+        else:
+            start_dt, end_dt = st.slider(
+                "Zakres czasu (Europe/Warsaw)",
+                min_value=min_dt.to_pydatetime(),
+                max_value=max_dt.to_pydatetime(),
+                value=(min_dt.to_pydatetime(), max_dt.to_pydatetime()),
+            )
 
-f = f[
-    (f["scraped_at_local"] >= start_dt) &
-    (f["scraped_at_local"] <= end_dt)
-]
+    # -------------------------------
+    # Apply filters
+    # -------------------------------
+    f = df.copy()
 
-# -------------------------------
-# Chart
-# -------------------------------
-st.subheader("Wykres ceny w czasie")
+    if selected_room_types:
+        f = f[f["room_type"].isin(selected_room_types)]
 
-if f.empty:
-    st.info("Brak danych dla wybranych filtrów.")
-    st.stop()
+    if selected_currencies:
+        f = f[f["currency"].isin(selected_currencies)]
 
-f["series"] = (
-    f["room_type"].astype(str)
-    + " | breakfast=" + f["breakfast_included"].astype(str)
-    + " | " + f["currency"].astype(str)
-)
+    if breakfast_choice == "true":
+        f = f[f["breakfast_included"] == True]
+    elif breakfast_choice == "false":
+        f = f[f["breakfast_included"] == False]
 
-chart = (
-    alt.Chart(f)
-    .mark_line(point=True)
-    .encode(
-        x=alt.X("scraped_at_local:T", title="Time (Europe/Warsaw)"),
-        y=alt.Y("price:Q", title="Price"),
-        color=alt.Color("series:N", title="Series"),
-        tooltip=[
-            alt.Tooltip("scraped_at_local:T", title="Time"),
-            alt.Tooltip("room_type:N", title="Room"),
-            alt.Tooltip("breakfast_included:N", title="Breakfast"),
-            alt.Tooltip("currency:N", title="Currency"),
-            alt.Tooltip("price:Q", title="Price"),
-        ],
+    f = f[
+        (f["scraped_at_local"] >= start_dt) &
+        (f["scraped_at_local"] <= end_dt)
+    ]
+
+    st.subheader("Wykres ceny w czasie")
+
+    if f.empty:
+        st.info("Brak danych dla wybranych filtrów.")
+        st.stop()
+
+    f = f.copy()
+    f["series"] = (
+        f["room_type"].astype(str)
+        + " | breakfast=" + f["breakfast_included"].astype(str)
+        + " | " + f["currency"].astype(str)
     )
-    .properties(height=500)
-    .interactive()
-)
 
-st.altair_chart(chart, use_container_width=True)
+    chart = (
+        alt.Chart(f)
+        .mark_line(point=True)
+        .encode(
+            x=alt.X("scraped_at_local:T", title="Time (Europe/Warsaw)"),
+            y=alt.Y("price:Q", title="Price"),
+            color=alt.Color("series:N", title="Series"),
+            tooltip=[
+                alt.Tooltip("scraped_at_local:T", title="Time"),
+                alt.Tooltip("room_type:N", title="Room"),
+                alt.Tooltip("breakfast_included:N", title="Breakfast"),
+                alt.Tooltip("currency:N", title="Currency"),
+                alt.Tooltip("price:Q", title="Price"),
+            ],
+        )
+        .properties(height=500)
+        .interactive()
+    )
 
-# -------------------------------
-# Data table
-# -------------------------------
-st.subheader("Dane (po filtrach)")
+    st.altair_chart(chart, use_container_width=True)
 
-st.dataframe(
-    f[["scraped_at_local", "room_type", "breakfast_included", "price", "currency"]]
-    .sort_values("scraped_at_local", ascending=False),
-    use_container_width=True
-)
+    st.subheader("Dane (po filtrach)")
+    st.dataframe(
+        f[["scraped_at_local", "room_type", "breakfast_included", "price", "currency"]]
+        .sort_values("scraped_at_local", ascending=False),
+        use_container_width=True
+    )
 
-# -------------------------------
-# Average prices table
-# -------------------------------
-st.subheader("Średnia cena dla typów pokoi (ze śniadaniem / bez śniadania)")
+    st.subheader("Średnia cena dla typów pokoi (ze śniadaniem / bez śniadania)")
 
-avg_prices = (
-    f.groupby(["room_type", "breakfast_included", "currency"], dropna=False)["price"]
-    .mean()
-    .reset_index()
-    .rename(columns={"price": "avg_price"})
-    .sort_values(["room_type", "breakfast_included", "currency"])
-)
+    avg_prices = (
+        f.groupby(["room_type", "breakfast_included", "currency"], dropna=False)["price"]
+        .mean()
+        .reset_index()
+        .rename(columns={"price": "avg_price"})
+        .sort_values(["room_type", "breakfast_included", "currency"])
+    )
 
-avg_prices["avg_price"] = avg_prices["avg_price"].round(2)
+    avg_prices["avg_price"] = avg_prices["avg_price"].round(2)
+    st.dataframe(avg_prices, use_container_width=True)
 
-st.dataframe(avg_prices, use_container_width=True)
+
+# =========================================================
+# SCREEN 2: FLIGHT PRICES
+# =========================================================
+elif page == "Flight prices":
+    st.title("✈️ Flight prices over time")
+
+    df = load_last_flights(limit=limit)
+
+    if df.empty:
+        st.warning("Brak danych w tabeli flight_prices.")
+        st.stop()
+
+    # -------------------------------
+    # Sidebar filters
+    # -------------------------------
+    with st.sidebar:
+        st.header("Filtry lotów")
+
+        flight_types = sorted(df["flight_type"].dropna().unique().tolist())
+        airports_from = sorted(df["airport_from"].dropna().unique().tolist())
+        airports_to = sorted(df["airport_to"].dropna().unique().tolist())
+
+        selected_flight_types = st.multiselect(
+            "flight_type",
+            options=flight_types,
+            default=flight_types if flight_types else []
+        )
+
+        selected_airports_from = st.multiselect(
+            "airport_from",
+            options=airports_from,
+            default=airports_from if airports_from else []
+        )
+
+        selected_airports_to = st.multiselect(
+            "airport_to",
+            options=airports_to,
+            default=airports_to if airports_to else []
+        )
+
+        min_dt = df["scraped_at_local"].min()
+        max_dt = df["scraped_at_local"].max()
+
+        if min_dt == max_dt:
+            st.info(f"Tylko jeden punkt czasowy: {min_dt}")
+            start_dt = min_dt.to_pydatetime()
+            end_dt = max_dt.to_pydatetime()
+        else:
+            start_dt, end_dt = st.slider(
+                "Zakres czasu scrape (Europe/Warsaw)",
+                min_value=min_dt.to_pydatetime(),
+                max_value=max_dt.to_pydatetime(),
+                value=(min_dt.to_pydatetime(), max_dt.to_pydatetime()),
+            )
+
+    # -------------------------------
+    # Apply filters
+    # -------------------------------
+    f = df.copy()
+
+    if selected_flight_types:
+        f = f[f["flight_type"].isin(selected_flight_types)]
+
+    if selected_airports_from:
+        f = f[f["airport_from"].isin(selected_airports_from)]
+
+    if selected_airports_to:
+        f = f[f["airport_to"].isin(selected_airports_to)]
+
+    f = f[
+        (f["scraped_at_local"] >= start_dt) &
+        (f["scraped_at_local"] <= end_dt)
+    ]
+
+    st.subheader("Wykres ceny lotów w czasie")
+
+    if f.empty:
+        st.info("Brak danych dla wybranych filtrów.")
+        st.stop()
+
+    f = f.copy()
+    f["route"] = f["airport_from"].astype(str) + " → " + f["airport_to"].astype(str)
+    f["series"] = (
+        f["flight_type"].astype(str)
+        + " | " + f["route"].astype(str)
+        + " | dep: " + f["departure_datetime_local"].dt.strftime("%Y-%m-%d %H:%M")
+    )
+
+    chart = (
+        alt.Chart(f)
+        .mark_line(point=True)
+        .encode(
+            x=alt.X("scraped_at_local:T", title="Scraped at (Europe/Warsaw)"),
+            y=alt.Y("price_pln:Q", title="Price [PLN]"),
+            color=alt.Color("series:N", title="Series"),
+            tooltip=[
+                alt.Tooltip("scraped_at_local:T", title="Scraped at"),
+                alt.Tooltip("flight_type:N", title="Flight type"),
+                alt.Tooltip("airport_from:N", title="From"),
+                alt.Tooltip("airport_to:N", title="To"),
+                alt.Tooltip("departure_datetime_local:T", title="Departure"),
+                alt.Tooltip("price_pln:Q", title="Price [PLN]"),
+            ],
+        )
+        .properties(height=500)
+        .interactive()
+    )
+
+    st.altair_chart(chart, use_container_width=True)
+
+    st.subheader("Dane (po filtrach)")
+    st.dataframe(
+        f[[
+            "scraped_at_local",
+            "flight_type",
+            "airport_from",
+            "airport_to",
+            "departure_datetime_local",
+            "price_pln"
+        ]].sort_values("scraped_at_local", ascending=False),
+        use_container_width=True
+    )
+
+    st.subheader("Średnia cena lotów")
+
+    avg_flights = (
+        f.groupby(
+            ["flight_type", "airport_from", "airport_to", "departure_datetime_local"],
+            dropna=False
+        )["price_pln"]
+        .mean()
+        .reset_index()
+        .rename(columns={"price_pln": "avg_price_pln"})
+        .sort_values(["flight_type", "airport_from", "airport_to", "departure_datetime_local"])
+    )
+
+    avg_flights["avg_price_pln"] = avg_flights["avg_price_pln"].round(2)
+    st.dataframe(avg_flights, use_container_width=True)
