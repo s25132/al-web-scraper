@@ -66,7 +66,7 @@ def ask_vision(image_path: str, question: str, rules: str = "", system: str = ""
     with open(image_path, "rb") as f:
         image_b64 = base64.b64encode(f.read()).decode("utf-8")
 
-    llm = ChatOpenAI(model="gpt-5", temperature=0)
+    llm = ChatOpenAI(model=os.getenv("OPENAI_MODEL", "gpt-5"), temperature=0)
 
     messages = [
         SystemMessage(content=system),

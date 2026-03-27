@@ -143,7 +143,7 @@ def ask_rag(vector_store, question: str, rules: str = "") -> str:
 
     context = "\n\n".join(d.page_content for d in vs_docs)
 
-    llm = ChatOpenAI(model="gpt-5", temperature=0)
+    llm = ChatOpenAI(model= os.getenv("OPENAI_MODEL", "gpt-5"), temperature=0)
     
     messages = [
         SystemMessage(content=SYSTEM),

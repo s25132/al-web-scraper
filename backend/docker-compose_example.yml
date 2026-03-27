@@ -4,6 +4,5 @@ services:
     environment:
       OPENAI_API_KEY: "key"
       OPENAI_MODEL: "gpt-5"
-      HF_TOKEN: "token"
       SUPABASE_URL: "https://example.supabase.co"
       SUPABASE_SERVICE_KEY: "key"
