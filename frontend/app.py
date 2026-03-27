@@ -306,24 +306,33 @@ elif page == "Flight prices":
 
     f = f.copy()
     f["route"] = f["airport_from"].astype(str) + " → " + f["airport_to"].astype(str)
-    f["series"] = (
-        f["flight_type"].astype(str)
-        + " | " + f["route"].astype(str)
+    f["series"] = f["flight_type"].astype(str) + " | " + f["route"].astype(str)
+
+    # wyciągnięcie samej daty bez godziny
+    f["scraped_day"] = pd.to_datetime(f["scraped_at_local"]).dt.floor("D")
+
+    # średnia cena dla tego samego dnia i tej samej trasy/typu lotu
+    f_avg = (
+        f.groupby(
+            ["scraped_day", "flight_type", "airport_from", "airport_to", "route", "series"],
+            as_index=False
+        )["price_pln"]
+        .mean()
     )
 
     chart = (
-        alt.Chart(f)
+        alt.Chart(f_avg)
         .mark_line(point=True)
         .encode(
-            x=alt.X("scraped_at_local:T", title="Scraped at (Europe/Warsaw)"),
-            y=alt.Y("price_pln:Q", title="Price [PLN]"),
+            x=alt.X("scraped_day:T", title="Scraped day (Europe/Warsaw)"),
+            y=alt.Y("price_pln:Q", title="Average price [PLN]"),
             color=alt.Color("series:N", title="Series"),
             tooltip=[
-                alt.Tooltip("scraped_at_local:T", title="Scraped at"),
+                alt.Tooltip("scraped_day:T", title="Day"),
                 alt.Tooltip("flight_type:N", title="Flight type"),
                 alt.Tooltip("airport_from:N", title="From"),
                 alt.Tooltip("airport_to:N", title="To"),
-                alt.Tooltip("price_pln:Q", title="Price [PLN]"),
+                alt.Tooltip("price_pln:Q", title="Average price [PLN]", format=".2f"),
             ],
         )
         .properties(height=500)
