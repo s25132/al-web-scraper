@@ -309,7 +309,6 @@ elif page == "Flight prices":
     f["series"] = (
         f["flight_type"].astype(str)
         + " | " + f["route"].astype(str)
-        + " | dep: " + f["departure_datetime_local"].dt.strftime("%Y-%m-%d %H:%M")
     )
 
     chart = (
@@ -324,7 +323,6 @@ elif page == "Flight prices":
                 alt.Tooltip("flight_type:N", title="Flight type"),
                 alt.Tooltip("airport_from:N", title="From"),
                 alt.Tooltip("airport_to:N", title="To"),
-                alt.Tooltip("departure_datetime_local:T", title="Departure"),
                 alt.Tooltip("price_pln:Q", title="Price [PLN]"),
             ],
         )
@@ -351,13 +349,13 @@ elif page == "Flight prices":
 
     avg_flights = (
         f.groupby(
-            ["flight_type", "airport_from", "airport_to", "departure_datetime_local"],
+            ["flight_type", "airport_from", "airport_to"],
             dropna=False
         )["price_pln"]
         .mean()
         .reset_index()
         .rename(columns={"price_pln": "avg_price_pln"})
-        .sort_values(["flight_type", "airport_from", "airport_to", "departure_datetime_local"])
+        .sort_values(["flight_type", "airport_from", "airport_to"])
     )
 
     avg_flights["avg_price_pln"] = avg_flights["avg_price_pln"].round(2)
