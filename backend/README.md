@@ -14,6 +14,15 @@ create table if not exists public.room_prices (
 
 ) 
 
+create table if not exists public.flight_prices (
+  id bigserial primary key,
+  scraped_at timestamptz not null default now(),
+  flight_type text not null,
+  price_pln numeric not null,
+  airport_from text not null,
+  airport_to text not null,
+  departure_datetime timestamptz not null
+)
 
 taskschd.msc 
 
