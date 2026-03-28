@@ -306,33 +306,30 @@ elif page == "Flight prices":
 
     f = f.copy()
     f["route"] = f["airport_from"].astype(str) + " → " + f["airport_to"].astype(str)
-    f["series"] = f["flight_type"].astype(str) + " | " + f["route"].astype(str)
-
-    # wyciągnięcie samej daty bez godziny
-    f["scraped_day"] = pd.to_datetime(f["scraped_at_local"]).dt.floor("D")
-
-    # średnia cena dla tego samego dnia i tej samej trasy/typu lotu
-    f_avg = (
-        f.groupby(
-            ["scraped_day", "flight_type", "airport_from", "airport_to", "route", "series"],
-            as_index=False
-        )["price_pln"]
-        .mean()
+    f["series"] = (
+        f["flight_type"].astype(str)
+        + " | " + f["route"].astype(str)
+        + " | dep: " + f["departure_datetime_local"].dt.strftime("%Y-%m-%d %H:%M")
     )
 
+    f["scraped_at_local"] = pd.to_datetime(f["scraped_at_local"])
+
+    f["scraped_day"] = f["scraped_at_local"].dt.floor("D")
+                                                                      
     chart = (
-        alt.Chart(f_avg)
+        alt.Chart(f)
         .mark_line(point=True)
         .encode(
-            x=alt.X("scraped_day:T", title="Scraped day (Europe/Warsaw)"),
-            y=alt.Y("price_pln:Q", title="Average price [PLN]"),
+            x=alt.X("scraped_day:T", title="Time", axis=alt.Axis(format="%Y-%m-%d")),
+            y=alt.Y("price_pln:Q", title="Price [PLN]"),
             color=alt.Color("series:N", title="Series"),
             tooltip=[
-                alt.Tooltip("scraped_day:T", title="Day"),
+                alt.Tooltip("scraped_day:T", title="Scraped at"),
                 alt.Tooltip("flight_type:N", title="Flight type"),
                 alt.Tooltip("airport_from:N", title="From"),
                 alt.Tooltip("airport_to:N", title="To"),
-                alt.Tooltip("price_pln:Q", title="Average price [PLN]", format=".2f"),
+                alt.Tooltip("departure_datetime_local:T", title="Departure", format="%Y-%m-%d %H:%M"),
+                alt.Tooltip("price_pln:Q", title="Price [PLN]"),
             ],
         )
         .properties(height=500)
@@ -358,13 +355,13 @@ elif page == "Flight prices":
 
     avg_flights = (
         f.groupby(
-            ["flight_type", "airport_from", "airport_to"],
+            ["flight_type", "airport_from", "airport_to", "departure_datetime_local"],
             dropna=False
         )["price_pln"]
         .mean()
         .reset_index()
         .rename(columns={"price_pln": "avg_price_pln"})
-        .sort_values(["flight_type", "airport_from", "airport_to"])
+        .sort_values(["flight_type", "airport_from", "airport_to", "departure_datetime_local"])
     )
 
     avg_flights["avg_price_pln"] = avg_flights["avg_price_pln"].round(2)
