@@ -167,26 +167,23 @@ def save_rooms_to_supabase(answer_json: str):
     data = json.loads(answer_json)
 
     rooms = data.get("rooms", [])
-    if not rooms:
-        raise ValueError("Brak rooms w JSON")
+    if rooms:
+        # Mapowanie JSON → kolumny w tabeli
+        payload = [
+            {
+                "room_type": r["room_type"],
+                "breakfast_included": bool(r["breakfast_included"]),
+                "price": r["price_eur"], 
+                "currency": "EUR"
+            }
+            for r in rooms
+        ]
 
-    # Mapowanie JSON → kolumny w tabeli
-    payload = [
-        {
-            "room_type": r["room_type"],
-            "breakfast_included": bool(r["breakfast_included"]),
-            "price": r["price_eur"], 
-            "currency": "EUR"
-        }
-        for r in rooms
-    ]
+        supabase.table("room_prices").insert(payload).execute()
+        print(f"Inserted {len(payload)} records into Supabase.")
+    else:
+        print("No rooms data found in the answer.")
 
-    response = supabase.table("room_prices").insert(payload).execute()
-
-    if response.data is None:
-        raise RuntimeError(f"Błąd insertu: {response}")
-
-    return response.data
 
 def get_hotels_data(url: str, query: str) -> None:
 

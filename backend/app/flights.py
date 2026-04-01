@@ -103,27 +103,24 @@ def save_flights_to_supabase(client, answer_json: str, table: str = "flight_pric
     data = json.loads(answer_json)
 
     flights = data.get("flights", [])
-    if not flights:
-        raise ValueError("Brak flights w JSON")
+    if flights:
+      
+        # Mapowanie JSON → kolumny w tabeli
+        payload = [
+            {
+                "flight_type": f["flight_type"],
+                "price_pln": f["price_pln"],
+                "airport_from": f["airport_from"],
+                "airport_to": f["airport_to"],
+                "departure_datetime": f["departure_datetime"]
+            }
+            for f in flights
+        ]
 
-    # Mapowanie JSON → kolumny w tabeli
-    payload = [
-        {
-            "flight_type": f["flight_type"],
-            "price_pln": f["price_pln"],
-            "airport_from": f["airport_from"],
-            "airport_to": f["airport_to"],
-            "departure_datetime": f["departure_datetime"]
-        }
-        for f in flights
-    ]
-
-    response = client.table(table).insert(payload).execute()
-
-    if response.data is None:
-        raise RuntimeError(f"Błąd insertu: {response}")
-
-    return response.data
+        response = client.table(table).insert(payload).execute()
+        print(f"Inserted {len(payload)} records into Supabase. Response: {response}")
+    else:
+        print("No flights data found in the answer.")
 
 def get_flights_data(url: str, query: str) -> None:
 
