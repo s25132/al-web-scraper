@@ -38,7 +38,7 @@ def get_page_screenshot(url: str, path: str = "/app/data/flights.png") -> str:
         browser = p.chromium.launch(headless=headless)
         context = browser.new_context(
             locale="pl-PL",
-            viewport={"width": 1440, "height": 2200},
+            viewport={"width": 1280, "height": 800},
             user_agent=(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -63,6 +63,10 @@ def get_page_screenshot(url: str, path: str = "/app/data/flights.png") -> str:
 
 
 def ask_vision(image_path: str, question: str, rules: str = "", system: str = "") -> str:
+
+    file_size_kb = os.path.getsize(image_path) / 1024
+    print(f"Screenshot size: {file_size_kb:.2f} KB")
+
     with open(image_path, "rb") as f:
         image_b64 = base64.b64encode(f.read()).decode("utf-8")
 
@@ -122,6 +126,19 @@ def save_flights_to_supabase(client, answer_json: str, table: str = "flight_pric
     else:
         print("No flights data found in the answer.")
 
+
+import time
+
+def ask_vision_with_retry(*args, retries=3, delay=2, **kwargs):
+    for i in range(retries):
+        try:
+            return ask_vision(*args, **kwargs)
+        except Exception as e:
+            print(f"Attempt {i+1} failed: {e}")
+            if i == retries - 1:
+                raise
+            time.sleep(delay)
+
 def get_flights_data(url: str, query: str) -> None:
 
 
@@ -164,7 +181,7 @@ Wykonuj tylko polecenie użytkownika."""
 
     image_path = get_page_screenshot(url=url)
 
-    answer = ask_vision(
+    answer = ask_vision_with_retry(
         image_path=image_path,
         question = query,
         rules = RULES,
