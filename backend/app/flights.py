@@ -104,7 +104,16 @@ Analizuj wyłącznie to, co rzeczywiście widać na obrazie.
     return response.content
 
 def save_flights_to_supabase(client, answer_json: str, table: str = "flight_prices"):
-    data = json.loads(answer_json)
+    if not answer_json:
+        print("No answer received from the model.")
+        return
+    
+    try:
+        data = json.loads(answer_json)
+    except json.JSONDecodeError:
+        print("Model returned invalid JSON:")
+        print(answer_json)
+        return
 
     flights = data.get("flights", [])
     if flights:
@@ -129,14 +138,14 @@ def save_flights_to_supabase(client, answer_json: str, table: str = "flight_pric
 
 import time
 
-def ask_vision_with_retry(*args, retries=3, delay=2, **kwargs):
+def ask_vision_with_retry(*args, retries=5, delay=2, **kwargs):
     for i in range(retries):
         try:
             return ask_vision(*args, **kwargs)
         except Exception as e:
             print(f"Attempt {i+1} failed: {e}")
             if i == retries - 1:
-                raise
+                print("All attempts failed.")
             time.sleep(delay)
 
 def get_flights_data(url: str, query: str) -> None:

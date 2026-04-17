@@ -5,7 +5,7 @@ if __name__ == "__main__":
     # Hotel w Berlinie, 2 osoby, 2 noce, 2026-05-02 - 2026-05-05
     BERLIN = "https://www.booking.com/hotel/de/maritimberlin.pl.html?label=gen173nr-10CAEoggI46AdIM1gEaLYBiAEBmAEzuAEXyAEM2AED6AEB-AEBiAIBqAIBuAKJ5ubMBsACAdICJDliMWZmMjZkLTY5ZGQtNDc5Ny04MDUxLTMyYzRmNjBlYjUzYtgCAeACAQ&sid=4b51bbf7a01a958f4b2fda85c35c5d56&aid=304142&ucfs=1&arphpl=1&checkin=2026-05-02&checkout=2026-05-05&group_adults=2&req_adults=2&no_rooms=1&group_children=0&req_children=0&all_sr_blocks=6037402_418238029_0_34_0&highlighted_blocks=6037402_418238029_0_34_0&matching_block_id=6037402_418238029_0_34_0&sr_pri_blocks=6037402_418238029_0_34_0&from_list=1&selected_currency=EUR"
 
-    QUESTION = f"""Daj mi cenę pokoju Pokój Dwuosobowy typu Classic i Pokój Dwuosobowy typu Comfort, oba ze śniadaniem i bez śniadania. Daj ceny w EUR"""
+    QUESTION = f"""Daj mi cenę pokoju tylko Pokój Dwuosobowy typu Classic i Pokój Dwuosobowy typu Comfort (pomiń Pokój Dwuosobowy typu Superiorcd), oba ze śniadaniem i bez śniadania. Daj ceny w EUR. Jak nie ma pokoju go nie zwracaj."""
 
     get_hotels_data(BERLIN, QUESTION) 
 

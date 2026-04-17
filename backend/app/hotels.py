@@ -164,7 +164,16 @@ def ask_rag(vector_store, question: str, rules: str = "") -> str:
 
 
 def save_rooms_to_supabase(answer_json: str):
-    data = json.loads(answer_json)
+    if not answer_json:
+        print("No answer received from the model.")
+        return
+    
+    try:
+        data = json.loads(answer_json)
+    except json.JSONDecodeError:
+        print("Model returned invalid JSON:")
+        print(answer_json)
+        return
 
     rooms = data.get("rooms", [])
     if rooms:
